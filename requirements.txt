@@ -1,0 +1,2 @@
+--extra-index-url https://shared:HF6w0RbukY@packages.allegro.ai/repository/allegroai/simple
+allegroai==3.4.0
