@@ -64,7 +64,7 @@ if __name__ == "__main__":
         ix += args.batch
         dataset.add_frames(
             frameBatch,
-            auto_upload_destination=args.s3URI,
+            auto_upload_destination=args.uploadURI,
             local_dataset_root_path=args.workdir,
             batch_size=args.batch,
         )
