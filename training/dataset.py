@@ -249,7 +249,9 @@ class ClearMLDataset(Dataset):
         dataview = DataView()
         dataview.add_query(dataset_name=self._name, version_name=self._version)
         dataview.prefetch_files()
+        print("Dataview to list...")
         self._data = dataview.to_list()
+        print("Done!")
 
         PIL.Image.init()
         if len(self._data) == 0:
