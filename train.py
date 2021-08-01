@@ -506,11 +506,13 @@ def main(ctx, outdir, dry_run, **config_kwargs):
 
     # Getting the last pickle
     import glob
-    prev_run_dir = os.path.join(outdir, f'{max(prev_run_ids, default=-1):05d}-{run_desc}')
-    list_of_pickles = glob.glob(prev_run_dir + '/*.pkl')
-    if list_of_pickles:
-        last_pickle = max(list_of_pickles, key=os.path.getctime)
-        args.resume_pkl = last_pickle
+    if cur_run_id > 0:
+        last_run_id = cur_run_id - 1
+        prev_run_dir = os.path.join(outdir, f'{last_run_id:05d}-{run_desc}')
+        list_of_pickles = glob.glob(prev_run_dir + '/*.pkl')
+        if list_of_pickles:
+            last_pickle = max(list_of_pickles, key=os.path.getctime)
+            args.resume_pkl = last_pickle
 
     # Print options.
     print()
