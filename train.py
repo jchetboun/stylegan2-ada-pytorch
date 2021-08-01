@@ -504,6 +504,14 @@ def main(ctx, outdir, dry_run, **config_kwargs):
     args.run_dir = os.path.join(outdir, f'{cur_run_id:05d}-{run_desc}')
     assert not os.path.exists(args.run_dir)
 
+    # Getting the last pickle
+    import glob
+    prev_run_dir = os.path.join(outdir, f'{max(prev_run_ids, default=-1):05d}-{run_desc}')
+    list_of_pickles = glob.glob(prev_run_dir + '/*.pkl')
+    if list_of_pickles:
+        last_pickle = max(list_of_pickles, key=os.path.getctime)
+        args.resume_pkl = last_pickle
+
     # Print options.
     print()
     print('Training options:')
@@ -511,9 +519,9 @@ def main(ctx, outdir, dry_run, **config_kwargs):
     print()
     print(f'Output directory:   {args.run_dir}')
     if "path" in args.training_set_kwargs.keys():
-        print(f'Training data:      {args.training_set_kwargs.path}')
+         print(f'Training data:      {args.training_set_kwargs.path}')
     if "name" in args.training_set_kwargs.keys():
-        print(f'Training data name:      {args.training_set_kwargs.name}')
+        print(f'Training data name: {args.training_set_kwargs.name}')
     print(f'Training duration:  {args.total_kimg} kimg')
     print(f'Number of GPUs:     {args.num_gpus}')
     print(f'Number of images:   {args.training_set_kwargs.max_size}')
