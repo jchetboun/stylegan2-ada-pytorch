@@ -13,6 +13,7 @@ import PIL.Image
 import json
 import torch
 import dnnlib
+from allegroai import DataView, FrameGroup, SingleFrame
 
 try:
     import pyspng
@@ -234,3 +235,49 @@ class ImageFolderDataset(Dataset):
         return labels
 
 #----------------------------------------------------------------------------
+
+class ClearMLDataset(Dataset):
+    def __init__(self,
+        name,                   # Dataset name.
+        version,                # Dataset version.
+        resolution      = None, # Ensure specific resolution, None = highest available.
+        **super_kwargs,         # Additional arguments for the Dataset base class.
+    ):
+        self._name = name
+        self._version = version
+
+        dataview = DataView()
+        dataview.add_query(dataset_name=self._name, version_name=self._version)
+        dataview.prefetch_files()
+        self._data = dataview.to_list()
+
+        PIL.Image.init()
+        if len(self._data) == 0:
+            raise IOError('No image files found in the specified path')
+
+        raw_shape = [len(self._data)] + list(self._load_raw_image(0).shape)
+        if resolution is not None and (raw_shape[2] != resolution or raw_shape[3] != resolution):
+            raise IOError('Image files do not match the specified resolution')
+        super().__init__(name=name, raw_shape=raw_shape, **super_kwargs)
+
+    @staticmethod
+    def _file_ext(fname):
+        return os.path.splitext(fname)[1].lower()
+
+    def __getstate__(self):
+        return dict(super().__getstate__())
+
+    def _load_raw_image(self, raw_idx):
+        fname = self._data[raw_idx]["image"].get_local_source()
+        with open(fname, 'rb') as f:
+            if pyspng is not None and self._file_ext(fname) == '.png':
+                image = pyspng.load(f.read())
+            else:
+                image = np.array(PIL.Image.open(f))
+        if image.ndim == 2:
+            image = image[:, :, np.newaxis] # HW => HWC
+        image = image.transpose(2, 0, 1) # HWC => CHW
+        return image
+
+    def _load_raw_labels(self):
+        return None

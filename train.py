@@ -41,6 +41,8 @@ def setup_training_loop_kwargs(
     cond       = None, # Train conditional model based on dataset labels: <bool>, default = False
     subset     = None, # Train with only N images: <int>, default = all
     mirror     = None, # Augment dataset with x-flips: <bool>, default = False
+    clearml_name    = None,
+    clearml_version = None,
 
     # Base config.
     cfg        = None, # Base config: 'auto' (default), 'stylegan2', 'paper256', 'paper512', 'paper1024', 'cifar'
@@ -102,9 +104,12 @@ def setup_training_loop_kwargs(
     # Dataset: data, cond, subset, mirror
     # -----------------------------------
 
-    assert data is not None
-    assert isinstance(data, str)
-    args.training_set_kwargs = dnnlib.EasyDict(class_name='training.dataset.ImageFolderDataset', path=data, use_labels=True, max_size=None, xflip=False)
+    # assert data is not None
+    # assert isinstance(data, str)
+    if data is not None:
+        args.training_set_kwargs = dnnlib.EasyDict(class_name='training.dataset.ImageFolderDataset', path=data, use_labels=True, max_size=None, xflip=False)
+    else:
+        args.training_set_kwargs = dnnlib.EasyDict(class_name='training.dataset.ClearMLDataset', name=clearml_name, version=clearml_version, use_labels=True, max_size=None, xflip=False)
     args.data_loader_kwargs = dnnlib.EasyDict(pin_memory=True, num_workers=3, prefetch_factor=2)
     try:
         training_set = dnnlib.util.construct_class_by_name(**args.training_set_kwargs) # subclass of training.dataset.Dataset
@@ -407,7 +412,9 @@ class CommaSeparatedList(click.ParamType):
 @click.option('-n', '--dry-run', help='Print training options and exit', is_flag=True)
 
 # Dataset.
-@click.option('--data', help='Training data (directory or zip)', metavar='PATH', required=True)
+@click.option('--data', help='Training data (directory or zip)', metavar='PATH')
+@click.option('--clearml_name', help='ClearML dataset name')
+@click.option('--clearml_version', help='ClearML dataset version')
 @click.option('--cond', help='Train conditional model based on dataset labels [default: false]', type=bool, metavar='BOOL')
 @click.option('--subset', help='Train with only N images [default: all]', type=int, metavar='INT')
 @click.option('--mirror', help='Enable dataset x-flips [default: false]', type=bool, metavar='BOOL')
@@ -503,7 +510,10 @@ def main(ctx, outdir, dry_run, **config_kwargs):
     print(json.dumps(args, indent=2))
     print()
     print(f'Output directory:   {args.run_dir}')
-    print(f'Training data:      {args.training_set_kwargs.path}')
+    if "path" in args.training_set_kwargs.keys():
+        print(f'Training data:      {args.training_set_kwargs.path}')
+    if "name" in args.training_set_kwargs.keys():
+        print(f'Training data name:      {args.training_set_kwargs.name}')
     print(f'Training duration:  {args.total_kimg} kimg')
     print(f'Number of GPUs:     {args.num_gpus}')
     print(f'Number of images:   {args.training_set_kwargs.max_size}')
@@ -525,12 +535,13 @@ def main(ctx, outdir, dry_run, **config_kwargs):
 
     # Launch processes.
     print('Launching processes...')
-    torch.multiprocessing.set_start_method('spawn')
+    ctx = torch.multiprocessing.get_context("spawn")
+    # torch.multiprocessing.set_start_method('spawn')
     with tempfile.TemporaryDirectory() as temp_dir:
         if args.num_gpus == 1:
             subprocess_fn(rank=0, args=args, temp_dir=temp_dir)
         else:
-            torch.multiprocessing.spawn(fn=subprocess_fn, args=(args, temp_dir), nprocs=args.num_gpus)
+            ctx.spawn(fn=subprocess_fn, args=(args, temp_dir), nprocs=args.num_gpus)
 
 #----------------------------------------------------------------------------
 
