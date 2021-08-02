@@ -158,6 +158,10 @@ def training_loop(
             resume_data = legacy.load_network_pkl(f)
         for name, module in [('G', G), ('D', D), ('G_ema', G_ema)]:
             misc.copy_params_and_buffers(resume_data[name], module, require_all=False)
+        past_kimg = int(resume_pkl.split('network-snapshot-')[1].split('.pkl')[0])
+        total_kimg = total_kimg - past_kimg
+    else:
+        past_kimg = 0
 
     # Print network summary tables.
     if rank == 0:
@@ -245,7 +249,7 @@ def training_loop(
     if rank == 0:
         print(f'Training for {total_kimg} kimg...')
         print()
-    cur_nimg = 0
+    cur_nimg = past_kimg * 1000
     cur_tick = 0
     tick_start_nimg = cur_nimg
     tick_start_time = time.time()
