@@ -159,7 +159,6 @@ def training_loop(
         for name, module in [('G', G), ('D', D), ('G_ema', G_ema)]:
             misc.copy_params_and_buffers(resume_data[name], module, require_all=False)
         past_kimg = int(resume_pkl.split('network-snapshot-')[1].split('.pkl')[0])
-        total_kimg = total_kimg - past_kimg
     else:
         past_kimg = 0
 
