@@ -16,6 +16,7 @@ import PIL.Image
 import numpy as np
 import torch
 import dnnlib
+import wandb
 from torch_utils import misc
 from torch_utils import training_stats
 from torch_utils.ops import conv2d_gradfix
@@ -82,6 +83,8 @@ def save_image_grid(img, fname, drange, grid_size):
         PIL.Image.fromarray(img[:, :, 0], 'L').save(fname)
     if C == 3:
         PIL.Image.fromarray(img, 'RGB').save(fname)
+
+    return img
 
 #----------------------------------------------------------------------------
 
@@ -249,7 +252,7 @@ def training_loop(
         print(f'Training for {total_kimg} kimg...')
         print()
     cur_nimg = past_kimg * 1000
-    cur_tick = 0
+    cur_tick = past_kimg // kimg_per_tick
     tick_start_nimg = cur_nimg
     tick_start_time = time.time()
     maintenance_time = tick_start_time - start_time
@@ -350,7 +353,19 @@ def training_loop(
         # Save image snapshot.
         if (rank == 0) and (image_snapshot_ticks is not None) and (done or cur_tick % image_snapshot_ticks == 0):
             images = torch.cat([G_ema(z=z, c=c, noise_mode='const').cpu() for z, c in zip(grid_z, grid_c)]).numpy()
-            save_image_grid(images, os.path.join(run_dir, f'fakes{cur_nimg//1000:06d}.png'), drange=[-1,1], grid_size=grid_size)
+            grid = save_image_grid(images, os.path.join(run_dir, f'fakes{cur_nimg//1000:06d}.png'), drange=[-1,1], grid_size=grid_size)
+            images_wandb = []
+            gw, gh = grid_size
+            height, width, channel = grid.shape[-1]
+            for i in range(gh):
+                for j in range(gw):
+                    if channel == 1:
+                        images_wandb.append(PIL.Image.fromarray(img[height // gh * i : height // gh * (i + 1), width // gw * j : width // gw * (j + 1), 0], 'L'))
+                    if channel == 3:
+                        images_wandb.append(PIL.Image.fromarray(
+                            img[height // gh * i: height // gh * (i + 1), width // gw * j: width // gw * (j + 1), :],
+                            'RGB'))
+            wandb.log({"samples": [wandb.Image(image) for image in images]}, commit=False)
 
         # Save network snapshot.
         snapshot_pkl = None
@@ -368,6 +383,9 @@ def training_loop(
             if rank == 0:
                 with open(snapshot_pkl, 'wb') as f:
                     pickle.dump(snapshot_data, f)
+                artifact = wandb.Artifact('StyleGAN2', type='checkpoint')
+                artifact.add_file(snapshot_pkl)
+                wandb.log_artifact(artifact)
 
         # Evaluate metrics.
         if (snapshot_data is not None) and (len(metrics) > 0):
@@ -378,8 +396,20 @@ def training_loop(
                     dataset_kwargs=training_set_kwargs, num_gpus=num_gpus, rank=rank, device=device)
                 if rank == 0:
                     metric_main.report_metric(result_dict, run_dir=run_dir, snapshot_pkl=snapshot_pkl)
+                    wandb.log({result_dict["metric"]: result_dict["results"][result_dict["metric"]]}, commit=False)
                 stats_metrics.update(result_dict.results)
         del snapshot_data # conserve memory
+
+        # WandB
+        if rank == 0:
+            wandb.log({
+                "tick": cur_tick,
+                "kimg": cur_nimg / 1e3,
+                "time": tick_end_time - start_time,
+                "sec/tick": tick_end_time - tick_start_time,
+                "sec/kimg": (tick_end_time - tick_start_time) / (cur_nimg - tick_start_nimg) * 1e3,
+                "maintenance": maintenance_time,
+            })
 
         # Collect statistics.
         for phase in phases:

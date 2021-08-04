@@ -16,6 +16,7 @@ import json
 import tempfile
 import torch
 import dnnlib
+import wandb
 
 from training import training_loop
 from metrics import metric_main
@@ -536,6 +537,15 @@ def main(ctx, outdir, dry_run, **config_kwargs):
     if dry_run:
         print('Dry run; exiting.')
         return
+
+    # WandB init
+    wandb.init(project='stylegan2-ada-pytorch',
+               entity='lightricks',
+               config=args,
+               job_type='train',
+               dir=outdir,
+               resume='auto'
+               )
 
     # Create output directory.
     print('Creating output directory...')
