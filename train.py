@@ -50,6 +50,7 @@ def setup_training_loop_kwargs(
     gamma      = None, # Override R1 gamma: <float>
     kimg       = None, # Override training duration: <int>
     batch      = None, # Override batch size: <int>
+    wandb_log  = None,
 
     # Discriminator augmentation.
     aug        = None, # Augmentation mode: 'ada' (default), 'noaug', 'fixed'
@@ -224,6 +225,15 @@ def setup_training_loop_kwargs(
         desc += f'-batch{batch}'
         args.batch_size = batch
         args.batch_gpu = batch // gpus
+
+    if wandb_log is None:
+        wandb_log = False
+    assert isinstance(wandb_log, bool)
+    if wandb_log:
+        desc += '-wandb_log'
+        args.wandb_log = True
+    else:
+        args.wandb_log = False
 
     # ---------------------------------------------------
     # Discriminator augmentation: aug, p, target, augpipe
@@ -425,6 +435,7 @@ class CommaSeparatedList(click.ParamType):
 @click.option('--gamma', help='Override R1 gamma', type=float)
 @click.option('--kimg', help='Override training duration', type=int, metavar='INT')
 @click.option('--batch', help='Override batch size', type=int, metavar='INT')
+@click.option('--wandb_log', help='Log in WandB [default: false]', type=bool, metavar='BOOL')
 
 # Discriminator augmentation.
 @click.option('--aug', help='Augmentation mode [default: ada]', type=click.Choice(['noaug', 'ada', 'fixed']))
@@ -539,13 +550,14 @@ def main(ctx, outdir, dry_run, **config_kwargs):
         return
 
     # WandB init
-    wandb.init(project='stylegan2-ada-pytorch',
-               entity='lightricks',
-               config=args,
-               job_type='train',
-               dir=outdir,
-               resume='auto'
-               )
+    if args.wandb_log:
+        wandb.init(project='stylegan2-ada-pytorch',
+                   entity='lightricks',
+                   config=args,
+                   job_type='train',
+                   dir=outdir,
+                   resume='auto'
+                   )
 
     # Create output directory.
     print('Creating output directory...')

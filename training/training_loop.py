@@ -121,6 +121,7 @@ def training_loop(
     allow_tf32              = False,    # Enable torch.backends.cuda.matmul.allow_tf32 and torch.backends.cudnn.allow_tf32?
     abort_fn                = None,     # Callback function for determining whether to abort training. Must return consistent results across ranks.
     progress_fn             = None,     # Callback function for updating training progress. Called for all ranks.
+    wandb_log               = False,
 ):
     # Initialize.
     start_time = time.time()
@@ -354,18 +355,19 @@ def training_loop(
         if (rank == 0) and (image_snapshot_ticks is not None) and (done or cur_tick % image_snapshot_ticks == 0):
             images = torch.cat([G_ema(z=z, c=c, noise_mode='const').cpu() for z, c in zip(grid_z, grid_c)]).numpy()
             grid = save_image_grid(images, os.path.join(run_dir, f'fakes{cur_nimg//1000:06d}.png'), drange=[-1,1], grid_size=grid_size)
-            images_wandb = []
-            gw, gh = grid_size
-            height, width, channel = grid.shape[-1]
-            for i in range(gh):
-                for j in range(gw):
-                    if channel == 1:
-                        images_wandb.append(PIL.Image.fromarray(img[height // gh * i : height // gh * (i + 1), width // gw * j : width // gw * (j + 1), 0], 'L'))
-                    if channel == 3:
-                        images_wandb.append(PIL.Image.fromarray(
-                            img[height // gh * i: height // gh * (i + 1), width // gw * j: width // gw * (j + 1), :],
-                            'RGB'))
-            wandb.log({"samples": [wandb.Image(image) for image in images]}, commit=False)
+            if wandb_log:
+                images_wandb = []
+                gw, gh = grid_size
+                height, width, channel = grid.shape[-1]
+                for i in range(gh):
+                    for j in range(gw):
+                        if channel == 1:
+                            images_wandb.append(PIL.Image.fromarray(img[height // gh * i : height // gh * (i + 1), width // gw * j : width // gw * (j + 1), 0], 'L'))
+                        if channel == 3:
+                            images_wandb.append(PIL.Image.fromarray(
+                                img[height // gh * i: height // gh * (i + 1), width // gw * j: width // gw * (j + 1), :],
+                                'RGB'))
+                wandb.log({"samples": [wandb.Image(image) for image in images]}, commit=False)
 
         # Save network snapshot.
         snapshot_pkl = None
@@ -383,9 +385,10 @@ def training_loop(
             if rank == 0:
                 with open(snapshot_pkl, 'wb') as f:
                     pickle.dump(snapshot_data, f)
-                artifact = wandb.Artifact('StyleGAN2', type='checkpoint')
-                artifact.add_file(snapshot_pkl)
-                wandb.log_artifact(artifact)
+                if wandb_log:
+                    artifact = wandb.Artifact('StyleGAN2', type='checkpoint')
+                    artifact.add_file(snapshot_pkl)
+                    wandb.log_artifact(artifact)
 
         # Evaluate metrics.
         if (snapshot_data is not None) and (len(metrics) > 0):
@@ -396,12 +399,13 @@ def training_loop(
                     dataset_kwargs=training_set_kwargs, num_gpus=num_gpus, rank=rank, device=device)
                 if rank == 0:
                     metric_main.report_metric(result_dict, run_dir=run_dir, snapshot_pkl=snapshot_pkl)
-                    wandb.log({result_dict["metric"]: result_dict["results"][result_dict["metric"]]}, commit=False)
+                    if wandb_log:
+                        wandb.log({result_dict["metric"]: result_dict["results"][result_dict["metric"]]}, commit=False)
                 stats_metrics.update(result_dict.results)
         del snapshot_data # conserve memory
 
         # WandB
-        if rank == 0:
+        if rank == 0 and wandb_log:
             wandb.log({
                 "tick": cur_tick,
                 "kimg": cur_nimg / 1e3,
