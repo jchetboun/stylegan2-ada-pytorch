@@ -524,8 +524,9 @@ def main(ctx, outdir, dry_run, **config_kwargs):
         list_of_pickles = glob.glob(prev_run_dir + '/*.pkl')
         if list_of_pickles:
             max_kimg = max([int(pickle.split('network-snapshot-')[1].split('.pkl')[0]) for pickle in list_of_pickles])
-            last_pickle = f'network-snapshot-{max_kimg:06d}.pkl'
+            last_pickle = os.path.join(prev_run_dir, f'network-snapshot-{max_kimg:06d}.pkl')
             args.resume_pkl = last_pickle
+            print('Found', last_pickle)
 
     # Print options.
     print()
