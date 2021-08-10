@@ -356,16 +356,16 @@ def training_loop(
             grid = save_image_grid(images, os.path.join(run_dir, f'fakes{cur_nimg//1000:06d}.png'), drange=[-1,1], grid_size=grid_size)
             images_wandb = []
             gw, gh = grid_size
-            height, width, channel = grid.shape[-1]
+            height, width, channel = grid.shape
             for i in range(gh):
                 for j in range(gw):
                     if channel == 1:
-                        images_wandb.append(PIL.Image.fromarray(img[height // gh * i : height // gh * (i + 1), width // gw * j : width // gw * (j + 1), 0], 'L'))
+                        images_wandb.append(PIL.Image.fromarray(grid[height // gh * i : height // gh * (i + 1), width // gw * j : width // gw * (j + 1), 0], 'L'))
                     if channel == 3:
                         images_wandb.append(PIL.Image.fromarray(
-                            img[height // gh * i: height // gh * (i + 1), width // gw * j: width // gw * (j + 1), :],
+                            grid[height // gh * i: height // gh * (i + 1), width // gw * j: width // gw * (j + 1), :],
                             'RGB'))
-            wandb.log({"samples": [wandb.Image(image) for image in images]}, commit=False)
+            wandb.log({"samples": [wandb.Image(image) for image in images_wandb]}, commit=False)
 
         # Save network snapshot.
         snapshot_pkl = None
