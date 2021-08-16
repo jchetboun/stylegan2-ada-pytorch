@@ -404,11 +404,11 @@ def training_loop(
         if rank == 0:
             wandb.log({
                 "tick": cur_tick,
-                "kimg": cur_nimg / 1e3,
-                "time": tick_end_time - start_time,
-                "sec/tick": tick_end_time - tick_start_time,
-                "sec/kimg": (tick_end_time - tick_start_time) / (cur_nimg - tick_start_nimg) * 1e3,
-                "maintenance": maintenance_time,
+                "kimg": round(cur_nimg / 1e3, 1),
+                "time": round(tick_end_time - start_time, 1),
+                "sec/tick": round(tick_end_time - tick_start_time, 1),
+                "sec/kimg": round((tick_end_time - tick_start_time) / (cur_nimg - tick_start_nimg) * 1e3, 2),
+                "maintenance": round(maintenance_time, 1),
             })
 
         # Collect statistics.
